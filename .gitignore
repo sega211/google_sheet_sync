@@ -28,8 +28,7 @@ Thumbs.db
 /.vagrant
 /coverage
 
-# Google credentials
-/storage/app/google-service-account.json
+
 
 # Логи
 *.log
