@@ -10,10 +10,16 @@ RUN apt-get update && apt-get install -y \
     libzip-dev \
     zip \
     unzip \
-    cron
+    cron \
+    nginx  # Добавляем Nginx!
 
 # Установка PHP расширений
 RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip
+
+# Настройка Nginx + PHP-FPM
+RUN rm /etc/nginx/sites-enabled/default
+COPY docker/nginx.conf /etc/nginx/sites-available/laravel
+RUN ln -s /etc/nginx/sites-available/laravel /etc/nginx/sites-enabled/laravel
 
 # Установка Composer
 RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
@@ -43,11 +49,17 @@ RUN composer install --optimize-autoloader --no-dev
 # Установка зависимостей Node.js и сборка фронтенда
 RUN npm install && npm run production
 
-# Кеширование
-RUN php artisan config:cache && \
-    php artisan route:cache && \
-    php artisan view:cache
-
 # Запуск cron
 RUN touch /var/log/cron.log
 RUN (crontab -l ; echo "* * * * * cd /var/www && php artisan schedule:run >> /var/log/cron.log 2>&1") | crontab -
+
+# Кеширование (перенесено в entrypoint)
+# !!! Убрали отсюда php artisan config:cache !!!
+
+# Entrypoint скрипт
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+ENTRYPOINT ["/entrypoint.sh"]
+
+# Стартовая команда
+CMD ["start-server"]
