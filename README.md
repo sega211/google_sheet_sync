@@ -65,25 +65,27 @@
 Просмотр комментариев: /fetch или /fetch/{count}
 
 ### Консольные комманды
+    
+    - Синхронизация данных
 
-    - Синхронизация данных:
     ```bash
     php artisan sync:google-sheets
 
     - Просмотр комментариев
+
     ```bash
     php artisan fetch:comments
     php artisan fetch:comments --count=5
+    ```
 
-```markdown
-    ### Планировщик задач
+### Планировщик задач
 
-    Синхронизация запускается автоматически каждую минуту. Для настройки cron на сервере добавьте:
+Синхронизация запускается автоматически каждую минуту. Для настройки cron на сервере добавьте:
 
     ```bash
     * * * * * cd /path-to-your-project && php artisan schedule:run >> /dev/null 2>&1 
     ```
-```
+
 
 ## Docker
 Для запуска в Docker:
