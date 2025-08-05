@@ -1,0 +1,40 @@
+# Laravel
+/vendor/
+/node_modules/
+/public/hot
+/public/storage
+/storage/*.key
+/.env
+/.env.backup
+/.phpunit.result.cache
+/docker-compose.override.yml
+Homestead.json
+Homestead.yaml
+npm-debug.log
+yarn-error.log
+
+# Docker
+docker-compose.override.yml
+
+# IDE
+/.idea
+/.vscode
+
+# Системные файлы
+.DS_Store
+Thumbs.db
+
+# Дополнительные
+/.vagrant
+/coverage
+
+# Google credentials
+/storage/app/google-service-account.json
+
+# Логи
+*.log
+
+# Фронтенд
+/public/js/
+/public/css/
+/public/mix-manifest.json
