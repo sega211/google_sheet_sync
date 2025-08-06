@@ -54,10 +54,10 @@
             <div class="card-header">
                 <h5>Google Sheets Integration</h5>
             </div>
-            <div class="card-body">
+           <div class="card-body">
                 <form action="{{ route('products.set-spreadsheet') }}" method="POST">
                     @csrf
-                    <div class="input-group">
+                    <div class="input-group mb-3">
                         <input type="url" name="spreadsheet_url" 
                             placeholder="Google Sheet URL" 
                             class="form-control"
@@ -66,12 +66,22 @@
                             <i class="fas fa-link"></i> Set Spreadsheet
                         </button>
                     </div>
-                    @if(env('GOOGLE_SPREADSHEET_ID'))
-                        <div class="mt-2">
-                            <small>Current Spreadsheet ID: {{ env('GOOGLE_SPREADSHEET_ID') }}</small>
-                        </div>
-                    @endif
                 </form>
+
+                @if($currentSpreadsheetId)
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <small class="text-muted">Current Spreadsheet ID:</small>
+                            <strong>{{ $currentSpreadsheetId }}</strong>
+                        </div>
+                        <form action="{{ route('products.reset-spreadsheet') }}" method="POST">
+                            @csrf
+                            <button type="submit" class="btn btn-sm btn-warning">
+                                <i class="fas fa-undo"></i> Reset
+                            </button>
+                        </form>
+                    </div>
+                @endif
             </div>
         </div>
         

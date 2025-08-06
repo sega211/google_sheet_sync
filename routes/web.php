@@ -8,13 +8,14 @@ Route::resource('products', ProductController::class);
 
 Route::prefix('products')->group(function () {
     Route::post('/generate-demo', [ProductController::class, 'generateDemoData'])
-        ->name('products.generate');
+        ->name('products.generate'); 
     
     Route::post('/clear', [ProductController::class, 'clearAll'])
         ->name('products.clear');
     
     Route::post('/set-spreadsheet', [ProductController::class, 'setSpreadsheetUrl'])
         ->name('products.set-spreadsheet');
+    Route::post('/reset-spreadsheet', [ProductController::class, 'resetSpreadsheet'])->name('products.reset-spreadsheet');
     
     Route::post('/sync', [ProductController::class, 'sync'])
         ->name('products.sync');

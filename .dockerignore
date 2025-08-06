@@ -6,5 +6,5 @@ docker-compose.yml
 node_modules
 vendor
 .env
-docker/
+
 README.md

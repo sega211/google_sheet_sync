@@ -16,6 +16,7 @@ yarn-error.log
 
 # Docker
 docker-compose.override.yml
+docker-compose.override.yml.*
 
 # IDE
 /.idea
@@ -29,12 +30,40 @@ Thumbs.db
 /.vagrant
 /coverage
 
-
-
 # Логи
 *.log
+/storage/logs/*.log
 
 # Фронтенд
 /public/js/
 /public/css/
 /public/mix-manifest.json
+
+# Google service account credentials
+/storage/app/google-service-account.json
+/google-service-account.json
+
+# Session files
+/storage/framework/sessions/*
+
+# Cache files
+/storage/framework/cache/*
+/storage/framework/views/*
+
+# Environment-specific files
+.env
+.env.production
+.env.staging
+
+# User-specific spreadsheet ID
+/storage/app/spreadsheet_id.txt
+
+# Docker volumes
+/docker-volumes/
+
+# Test outputs
+/tests/Output
+
+# Composer lock file (лучше коммитить, но для безопасности)
+# composer.lock
+storage/app/google-service-account.json
