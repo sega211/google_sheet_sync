@@ -1,40 +1,69 @@
 #!/bin/bash
+set -e
 
-# Запуск cron в фоне
-cron
+# Функция ожидания готовности MySQL
+wait_for_db() {
+    local host="$1"
+    local port="$2"
+    local user="$3"
+    local password="$4"
+    local timeout=60
+    local start_time=$(date +%s)
 
-# Создаем файл Google Service Account из переменной окружения
-if [ -n "$GOOGLE_CREDENTIALS_BASE64" ]; then
-    echo "Создание файла Google Service Account..."
-    mkdir -p storage/app
-    echo "$GOOGLE_CREDENTIALS_BASE64" | base64 -d > storage/app/google-service-account.json
-    chmod 644 storage/app/google-service-account.json
+    echo "Ожидание готовности MySQL ($host:$port)..."
+
+    while true; do
+        if mysqladmin ping -h"$host" -P"$port" -u"$user" -p"$password" --silent; then
+            echo "MySQL готов к работе!"
+            return 0
+        fi
+        
+        current_time=$(date +%s)
+        elapsed_time=$((current_time - start_time))
+        
+        if [ $elapsed_time -ge $timeout ]; then
+            echo "Ошибка: MySQL не доступен после $timeout секунд ожидания"
+            return 1
+        fi
+        
+        echo "Попытка подключения... ($elapsed_time/$timeout сек)"
+        sleep 2
+    done
+}
+
+# Установка прав для storage
+mkdir -p /var/www/storage/framework/{sessions,views,cache}
+chown -R www-data:www-data /var/www/storage
+chmod -R 775 /var/www/storage
+
+# Ожидание готовности БД
+if [ -n "$DB_HOST" ] && [ -n "$DB_PORT" ] && [ -n "$DB_USERNAME" ] && [ -n "$DB_PASSWORD" ]; then
+    wait_for_db "$DB_HOST" "$DB_PORT" "$DB_USERNAME" "$DB_PASSWORD"
+else
+    echo "Переменные DB_HOST, DB_PORT, DB_USERNAME или DB_PASSWORD не установлены, пропускаем ожидание БД"
 fi
 
-# Выполняем миграции только при первом запуске
-if [ ! -f "/var/www/.migrated" ]; then
-    echo "Выполнение миграций..."
-    php artisan migrate --force
-    touch /var/www/.migrated
-fi
+# Выполнение миграций
+echo "Выполнение миграций..."
+php artisan migrate --force
 
-# Кеширование Laravel
+echo "Очистка кеша Laravel..."
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
+php artisan event:cache
 
-# Запуск сервера
-if [ "$1" = "start-server" ]; then
-    echo "Запуск PHP-FPM и Nginx..."
-    
-    # Запуск PHP-FPM в фоне
-    php-fpm &
-    
-    # Запуск Nginx на переднем плане
-    nginx -g "daemon off;"
-    
-    # Мониторинг логов
-    tail -f /var/log/nginx/error.log /var/log/cron.log
-fi
+# Запуск в зависимости от команды
+cmd="$1"
+shift
 
-exec "$@"
+case "$cmd" in
+    start-server)
+        echo "Запуск PHP-FPM и планировщика..."
+        /usr/bin/supervisord -n -c /etc/supervisor/conf.d/supervisor.conf
+        ;;
+    *)
+        echo "Запуск команды: $cmd"
+        exec "$cmd" "$@"
+        ;;
+esac
