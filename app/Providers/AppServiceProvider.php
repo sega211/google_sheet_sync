@@ -23,6 +23,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot()
     {
-        //
+        if ($this->app->bound('config') && method_exists($this->app['config'], 'set')) {
+        $this->app['config']->set('ignition.report_query_bindings', true);
+        }
     }
 }
