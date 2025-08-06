@@ -2,13 +2,11 @@ version: '3.8'
 
 services:
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: laravel-app
+    build: .
     container_name: app
     volumes:
       - ./:/var/www
+      - storage-volume:/var/www/storage
     environment:
       - DB_HOST=db
       - DB_PORT=3306
@@ -16,18 +14,21 @@ services:
       - DB_USERNAME=root
       - DB_PASSWORD=secret
       - GOOGLE_SERVICE_ACCOUNT_JSON=${GOOGLE_SERVICE_ACCOUNT_JSON}
+      - GOOGLE_SERVICE_ACCOUNT_JSON_BASE64=${GOOGLE_SERVICE_ACCOUNT_JSON_BASE64}
       - GOOGLE_SPREADSHEET_ID=${GOOGLE_SPREADSHEET_ID}
     networks:
-      - laravel-network
+      - laravel-network  
+    depends_on:
+      - db
 
   webserver:
     image: nginx:alpine
     container_name: webserver
     ports:
-      - "8000:80"
+      - "8000:8000"
     volumes:
-      - ./:/var/www
       - ./docker/nginx:/etc/nginx/conf.d
+      - ./:/var/www
     networks:
       - laravel-network
     depends_on:
@@ -60,14 +61,12 @@ services:
       - db
 
   scheduler:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: laravel-app
+    image: ${DOCKER_IMAGE:-laravel-app}  # Используем ту же сборку
     container_name: scheduler
-    command: bash -c "while true; do php /var/www/artisan schedule:run; sleep 60; done"
+    command: php artisan schedule:work  # Для локальной разработки
     volumes:
       - ./:/var/www
+      - storage-volume:/var/www/storage
     environment:
       - DB_HOST=db
       - DB_PORT=3306
@@ -75,6 +74,7 @@ services:
       - DB_USERNAME=root
       - DB_PASSWORD=secret
       - GOOGLE_SERVICE_ACCOUNT_JSON=${GOOGLE_SERVICE_ACCOUNT_JSON}
+      - GOOGLE_SERVICE_ACCOUNT_JSON_BASE64=${GOOGLE_SERVICE_ACCOUNT_JSON_BASE64}
       - GOOGLE_SPREADSHEET_ID=${GOOGLE_SPREADSHEET_ID}
     networks:
       - laravel-network
@@ -84,6 +84,7 @@ services:
 
 volumes:
   dbdata:
+  storage-volume: 
 
 networks:
   laravel-network:

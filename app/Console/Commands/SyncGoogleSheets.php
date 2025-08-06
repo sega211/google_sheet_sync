@@ -6,6 +6,7 @@ use App\Models\Product;
 use App\Services\GoogleSheetsService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage; // Добавлено
 
 class SyncGoogleSheets extends Command
 {
@@ -15,6 +16,12 @@ class SyncGoogleSheets extends Command
     public function handle(GoogleSheetsService $sheets)
     {
         try {
+            // Чтение ID из файлового хранилища
+            if (Storage::exists('spreadsheet_id.txt')) {
+                $spreadsheetId = Storage::get('spreadsheet_id.txt');
+                $sheets->setSpreadsheetId($spreadsheetId);
+            }
+            
             // Используем scope allowed
             $products = Product::allowed()->get();
             
