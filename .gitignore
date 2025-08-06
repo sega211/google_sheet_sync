@@ -66,3 +66,7 @@ Thumbs.db
 
 # Composer lock file (лучше коммитить, но для безопасности)
 # composer.lock
+
+
+storage/app/google-service-account.json
+
