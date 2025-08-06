@@ -7,28 +7,57 @@ use Google_Service_Sheets;
 use Google_Service_Sheets_ValueRange;
 use Google_Service_Sheets_ClearValuesRequest;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class GoogleSheetsService
 {
-    protected $service;
+      protected $service;
     protected $spreadsheetId;
 
     public function __construct()
     {
         $client = new Google_Client();
-        $jsonPath = storage_path(env('GOOGLE_SERVICE_ACCOUNT_JSON'));
-    
-        if (!file_exists($jsonPath)) {
-            throw new \Exception("Google service account JSON file not found at: $jsonPath");
-        }
-    
-        $client->setAuthConfig($jsonPath);
+        $client->setAuthConfig($this->getServiceAccountConfig());
         $client->addScope(Google_Service_Sheets::SPREADSHEETS);
+        $client->setAccessType('offline');
+        
         $this->service = new Google_Service_Sheets($client);
         $this->spreadsheetId = env('GOOGLE_SPREADSHEET_ID');
+        
+        Log::debug('Google Sheets service initialized', [
+            'spreadsheet_id' => $this->spreadsheetId
+        ]);
     }
 
-    public function setSpreadsheetId($spreadsheetId)
+    protected function getServiceAccountConfig(): array
+    {
+        $base64Json = env('GOOGLE_SERVICE_ACCOUNT_JSON_BASE64');
+        
+        if (!$base64Json) {
+            throw new \Exception("Переменная GOOGLE_SERVICE_ACCOUNT_JSON_BASE64 не установлена");
+        }
+        
+        $jsonContent = base64_decode($base64Json);
+        
+        if ($jsonContent === false) {
+            throw new \Exception("Не удалось декодировать строку base64");
+        }
+        
+        $config = json_decode($jsonContent, true);
+        
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            throw new \Exception("Содержимое не является валидным JSON: " . json_last_error_msg());
+        }
+        
+        // Исправляем формат приватного ключа
+        if (isset($config['private_key'])) {
+            $config['private_key'] = str_replace('\n', "\n", $config['private_key']);
+        }
+        
+        return $config;
+    }
+
+ public function setSpreadsheetId(string $spreadsheetId): void
     {
         $this->spreadsheetId = $spreadsheetId;
     }

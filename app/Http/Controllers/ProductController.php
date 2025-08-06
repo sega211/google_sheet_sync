@@ -5,14 +5,19 @@ namespace App\Http\Controllers;
 use App\Models\Product;
 use App\Services\GoogleSheetsService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Session;
+use Illuminate\Support\Facades\Storage; // Добавлено
 
 class ProductController extends Controller
 {
     public function index()
     {
         $products = Product::paginate(10);
-        $spreadsheetId = env('GOOGLE_SPREADSHEET_ID');
-        return view('products.index', compact('products', 'spreadsheetId'));
+        // Изменено: чтение из файлового хранилища
+        $currentSpreadsheetId = Storage::exists('spreadsheet_id.txt') 
+            ? Storage::get('spreadsheet_id.txt') 
+            : env('GOOGLE_SPREADSHEET_ID');
+        return view('products.index', compact('products', 'currentSpreadsheetId'));
     }
 
     public function create()
@@ -87,24 +92,65 @@ class ProductController extends Controller
         return redirect()->back()->with('success', 'All products deleted!');
     }
 
-    public function setSpreadsheetUrl(Request $request, GoogleSheetsService $sheets)
+      public function setSpreadsheetUrl(Request $request)
     {
+        $request->validate([
+            'spreadsheet_url' => 'required|url'
+        ]);
+        
         $url = $request->input('spreadsheet_url');
         
-        preg_match('/\/d\/([a-zA-Z0-9-_]+)/', $url, $matches);
-        $spreadsheetId = $matches[1] ?? null;
-
-        if ($spreadsheetId) {
-            $sheets->setSpreadsheetId($spreadsheetId);
+        // Улучшенная проверка URL
+        $patterns = [
+            '/\/d\/([a-zA-Z0-9-_]+)/',         // Стандартный URL
+            '/spreadsheets\/d\/([a-zA-Z0-9-_]+)/', // URL для редактирования
+            '/key=([a-zA-Z0-9-_]+)/',           // Старый формат
+            '/[\/=]([a-zA-Z0-9-_]{44})/'        // Универсальный по длине
+        ];
+        
+        $spreadsheetId = null;
+        
+        foreach ($patterns as $pattern) {
+            if (preg_match($pattern, $url, $matches)) {
+                $spreadsheetId = $matches[1];
+                break;
+            }
+        }
+        
+        // Валидация ID
+        if ($spreadsheetId && (strlen($spreadsheetId) >= 30 && strlen($spreadsheetId) <= 50)) {
+            // Сохраняем в файловое хранилище
+            Storage::put('spreadsheet_id.txt', $spreadsheetId);
             return redirect()->back()->with('success', 'Spreadsheet ID updated!');
         }
-
+        
         return redirect()->back()->with('error', 'Invalid Google Sheets URL');
+    }
+
+    public function resetSpreadsheet()
+    {
+        // Удаляем из файлового хранилища
+        if (Storage::exists('spreadsheet_id.txt')) {
+            Storage::delete('spreadsheet_id.txt');
+        }
+        return redirect()->back()->with('success', 'Spreadsheet reset to default!');
     }
 
     public function sync(GoogleSheetsService $sheets)
     {
-        \Artisan::call('sync:google-sheets');
-        return redirect()->back()->with('success', 'Synchronization started!');
+        try {
+            // Получаем текущий ID таблицы
+            $spreadsheetId = Session::get('user_spreadsheet_id', env('GOOGLE_SPREADSHEET_ID'));
+            
+            // Устанавливаем в сервисе
+            $sheets->setSpreadsheetId($spreadsheetId);
+            
+            // Вызываем команду синхронизации
+            \Artisan::call('sync:google-sheets');
+            
+            return redirect()->back()->with('success', 'Synchronization started!');
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', 'Synchronization failed: ' . $e->getMessage());
+        }
     }
 }
