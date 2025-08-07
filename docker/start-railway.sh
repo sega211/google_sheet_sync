@@ -1,7 +1,12 @@
 #!/bin/bash
 set -e
 
+# Установка порта по умолчанию
+export PORT=${PORT:-80}
 
+# Настройка Nginx порта
+echo "Setting Nginx port to $PORT"
+sed -i "s/listen .*/listen $PORT;/" /etc/nginx/sites-available/default
 # Парсинг DATABASE_URL
 if [ -n "$DATABASE_URL" ]; then
   echo "Parsing DATABASE_URL..."

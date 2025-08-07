@@ -2,9 +2,10 @@ FROM php:8.3-fpm
 
 # Установка зависимостей
 RUN apt-get update && apt-get install -y \
-    git curl libpng-dev libonig-dev libxml2-dev libzip-dev \
+    git curl libpng-dev libonig-dev libxml2-dev libzip-dev nginx\
     zip unzip cron default-mysql-client libmagickwand-dev supervisor
-
+# Копируем конфиг Nginx
+COPY docker/nginx/app.conf /etc/nginx/sites-available/default
 # PHP расширения
 RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip
 RUN pecl install imagick && docker-php-ext-enable imagick
