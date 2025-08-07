@@ -2,7 +2,7 @@
 set -e
 
 # Установка утилит для диагностики
-apt-get update && apt-get install -y jq dnsutils netcat-openbsd
+apt-get update && apt-get install -y jq dnsutils netcat-openbsd iputils-ping
 
 # Установка порта
 export PORT=${PORT:-80}
@@ -13,94 +13,62 @@ else
     echo "Nginx default conf not found at /etc/nginx/sites-available/default"
 fi
 
-# Расширенная диагностика переменных
+# =================================================================
+# НАЧАЛО КРИТИЧЕСКОЙ СЕКЦИИ - РУЧНЫЕ ПЕРЕМЕННЫЕ ДЛЯ ПОДКЛЮЧЕНИЯ К БД
+# =================================================================
+
+echo "===== RAILWAY SERVICE STATUS ====="
+echo "Service ID: $RAILWAY_SERVICE_ID"
+echo "Environment: $RAILWAY_ENVIRONMENT_NAME"
+echo "Project: $RAILWAY_PROJECT_NAME"
+
 echo "===== ENVIRONMENT DIAGNOSTICS ====="
-echo "DATABASE_URL: ${DATABASE_URL:-[not set]}"
-echo "MYSQLHOST: ${MYSQLHOST:-[not set]}"
-echo "MYSQLUSER: ${MYSQLUSER:-[not set]}"
-echo "MYSQLPASSWORD: ${MYSQLPASSWORD:+[present]}"
 env | grep -E 'DB_|MYSQL' || echo "No DB/MYSQL variables found"
-echo "=================================="
 
-# Функция для парсинга DATABASE_URL
-parse_database_url() {
-    if [ -n "$DATABASE_URL" ]; then
-        echo "Parsing DATABASE_URL: ${DATABASE_URL//:[^@]*@/:******@}"
-        
-        # Удаляем префикс mysql://
-        local url="${DATABASE_URL#mysql://}"
-        
-        # Извлекаем логин:пароль@хост:порт/база
-        local userpass="${url%%@*}"
-        export DB_USERNAME="${userpass%%:*}"
-        export DB_PASSWORD="${userpass#*:}"
-        
-        local hostportpath="${url#*@}"
-        export DB_HOST="${hostportpath%%:*}"
-        
-        local portpath="${hostportpath#*:}"
-        export DB_PORT="${portpath%%/*}"
-        export DB_DATABASE="${portpath#*/}"
-        
-        # Удаляем параметры запроса если есть
-        export DB_DATABASE="${DB_DATABASE%%\?*}"
-        
-        return 0
-    fi
-    return 1
-}
-
-# Попытка 1: Использование DATABASE_URL
-if parse_database_url; then
-    echo "Using DATABASE_URL for DB connection"
-
-# Попытка 2: Стандартные переменные Railway
-elif [ -n "$MYSQLHOST" ] && [ -n "$MYSQLUSER" ] && [ -n "$MYSQLPASSWORD" ]; then
-    echo "Using Railway standard variables"
-    export DB_HOST=$MYSQLHOST
-    export DB_PORT=$MYSQLPORT
-    export DB_DATABASE=$MYSQLDATABASE
-    export DB_USERNAME=$MYSQLUSER
-    export DB_PASSWORD=$MYSQLPASSWORD
-
-# Попытка 3: Ручные переменные через шаблоны
-elif [ -n "$DB_HOST" ] && [ -n "$DB_USERNAME" ] && [ -n "$DB_PASSWORD" ]; then
-    echo "Using manual DB_* variables"
-    # Уже установлены
-
-# Все попытки провалились
-else
-    echo "ERROR: Could not determine database connection details!"
-    echo "Please ensure:"
-    echo "1. MySQL service is linked to this application"
-    echo "2. DATABASE_URL variable is set to: \${{ MySQL-usZd.MYSQL_URL }}"
-    echo "3. Or set DB_HOST, DB_USERNAME, DB_PASSWORD manually"
-    
-    # Расширенная диагностика
+# Проверяем наличие критических переменных
+if [[ -z "$DB_HOST" || -z "$DB_USERNAME" || -z "$DB_PASSWORD" ]]; then
+    echo ""
+    echo "ERROR: Database connection variables are missing!"
+    echo "Please set in Railway dashboard:"
+    echo "DB_HOST, DB_USERNAME, DB_PASSWORD"
+    echo ""
+    echo "Current values:"
+    echo "DB_HOST: '$DB_HOST'"
+    echo "DB_USERNAME: '$DB_USERNAME'"
+    echo "DB_PASSWORD: ${DB_PASSWORD:+[present]}"
+    echo ""
     echo "===== FULL ENVIRONMENT DUMP ====="
     printenv | sort
-    echo "===== RAILWAY SECRETS ====="
-    ls -la /etc/railway/secrets || echo "No secrets directory"
-    
+    echo "===== RAILWAY SECRETS FILES ====="
+    ls -la /etc/railway/secrets
+    [ -f "/etc/railway/secrets/mysql.json" ] && cat /etc/railway/secrets/mysql.json
     exit 1
 fi
 
-# Установка значений по умолчанию
+# Установка значений по умолчанию для опциональных переменных
 export DB_PORT=${DB_PORT:-3306}
 export DB_DATABASE=${DB_DATABASE:-railway}
 
-# Отладочный вывод (без пароля)
-echo "=== DB CONNECTION DETAILS ==="
+# Отладочный вывод
+echo "=== USING MANUAL DB CONNECTION ==="
 echo "Host: $DB_HOST:$DB_PORT"
 echo "Database: $DB_DATABASE"
 echo "Username: $DB_USERNAME"
 echo "Password: ${DB_PASSWORD:0:2}******"
 
+# =================================================================
+# КОНЕЦ КРИТИЧЕСКОЙ СЕКЦИИ
+# =================================================================
+
 # Диагностика сети
 echo "=== NETWORK DIAGNOSTICS ==="
-echo "Resolving DB host:"
-nslookup $DB_HOST || echo "DNS lookup failed"
-echo "Testing DB port:"
+echo "Resolving DB host '$DB_HOST':"
+nslookup "$DB_HOST" || echo "DNS lookup failed"
+
+echo "Pinging DB host:"
+ping -c 2 "$DB_HOST" || echo "Ping failed"
+
+echo "Testing DB port $DB_PORT:"
 timeout 5 bash -c "cat < /dev/null > /dev/tcp/$DB_HOST/$DB_PORT" && \
     echo "Port test successful" || echo "Port test failed"
 
