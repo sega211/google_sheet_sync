@@ -13,37 +13,49 @@ else
     echo "Nginx default conf not found at /etc/nginx/sites-available/default"
 fi
 
-# Функция для получения секретов из Railway Secrets
-get_railway_secrets() {
-    if [ -f "/etc/railway/secrets/mysql.json" ]; then
-        echo "Reading MySQL credentials from Railway Secrets"
-        export DB_HOST=$(jq -r '.host' /etc/railway/secrets/mysql.json)
-        export DB_PORT=$(jq -r '.port' /etc/railway/secrets/mysql.json)
-        export DB_DATABASE=$(jq -r '.database' /etc/railway/secrets/mysql.json)
-        export DB_USERNAME=$(jq -r '.user' /etc/railway/secrets/mysql.json)
-        export DB_PASSWORD=$(jq -r '.password' /etc/railway/secrets/mysql.json)
-        return 0
-    fi
-    return 1
-}
+# Расширенная диагностика переменных
+echo "===== ENVIRONMENT DIAGNOSTICS ====="
+echo "DATABASE_URL: ${DATABASE_URL:-[not set]}"
+echo "MYSQLHOST: ${MYSQLHOST:-[not set]}"
+echo "MYSQLUSER: ${MYSQLUSER:-[not set]}"
+echo "MYSQLPASSWORD: ${MYSQLPASSWORD:+[present]}"
+env | grep -E 'DB_|MYSQL' || echo "No DB/MYSQL variables found"
+echo "=================================="
 
 # Функция для парсинга DATABASE_URL
 parse_database_url() {
     if [ -n "$DATABASE_URL" ]; then
-        echo "Parsing DATABASE_URL"
-        DB_INFO=$(echo "$DATABASE_URL" | awk -F[:/@] '{print $4,$5,$7,$8,$9}')
-        export DB_USERNAME=$(echo $DB_INFO | cut -d' ' -f1)
-        export DB_PASSWORD=$(echo $DB_INFO | cut -d' ' -f2)
-        export DB_HOST=$(echo $DB_INFO | cut -d' ' -f3)
-        export DB_PORT=$(echo $DB_INFO | cut -d' ' -f4)
-        export DB_DATABASE=$(echo $DB_INFO | cut -d' ' -f5)
+        echo "Parsing DATABASE_URL: ${DATABASE_URL//:[^@]*@/:******@}"
+        
+        # Удаляем префикс mysql://
+        local url="${DATABASE_URL#mysql://}"
+        
+        # Извлекаем логин:пароль@хост:порт/база
+        local userpass="${url%%@*}"
+        export DB_USERNAME="${userpass%%:*}"
+        export DB_PASSWORD="${userpass#*:}"
+        
+        local hostportpath="${url#*@}"
+        export DB_HOST="${hostportpath%%:*}"
+        
+        local portpath="${hostportpath#*:}"
+        export DB_PORT="${portpath%%/*}"
+        export DB_DATABASE="${portpath#*/}"
+        
+        # Удаляем параметры запроса если есть
+        export DB_DATABASE="${DB_DATABASE%%\?*}"
+        
         return 0
     fi
     return 1
 }
 
-# Попытка 1: Использование стандартных переменных Railway
-if [ -n "$MYSQLHOST" ] && [ -n "$MYSQLUSER" ] && [ -n "$MYSQLPASSWORD" ]; then
+# Попытка 1: Использование DATABASE_URL
+if parse_database_url; then
+    echo "Using DATABASE_URL for DB connection"
+
+# Попытка 2: Стандартные переменные Railway
+elif [ -n "$MYSQLHOST" ] && [ -n "$MYSQLUSER" ] && [ -n "$MYSQLPASSWORD" ]; then
     echo "Using Railway standard variables"
     export DB_HOST=$MYSQLHOST
     export DB_PORT=$MYSQLPORT
@@ -51,42 +63,23 @@ if [ -n "$MYSQLHOST" ] && [ -n "$MYSQLUSER" ] && [ -n "$MYSQLPASSWORD" ]; then
     export DB_USERNAME=$MYSQLUSER
     export DB_PASSWORD=$MYSQLPASSWORD
 
-# Попытка 2: Использование переменных DB_*
+# Попытка 3: Ручные переменные через шаблоны
 elif [ -n "$DB_HOST" ] && [ -n "$DB_USERNAME" ] && [ -n "$DB_PASSWORD" ]; then
-    echo "Using DB_* variables"
-    # Уже установлены, ничего не делаем
-
-# Попытка 3: Railway Secrets
-elif get_railway_secrets; then
-    echo "Using Railway Secrets"
-
-# Попытка 4: Парсинг DATABASE_URL
-elif parse_database_url; then
-    echo "Using DATABASE_URL"
-
-# Попытка 5: Прямые значения из Railway UI (Connect tab)
-elif [ -n "$RAILWAY_DB_HOST" ]; then
-    echo "Using direct connection parameters"
-    export DB_HOST=$RAILWAY_DB_HOST
-    export DB_PORT=$RAILWAY_DB_PORT
-    export DB_DATABASE=$RAILWAY_DB_DATABASE
-    export DB_USERNAME=$RAILWAY_DB_USERNAME
-    export DB_PASSWORD=$RAILWAY_DB_PASSWORD
+    echo "Using manual DB_* variables"
+    # Уже установлены
 
 # Все попытки провалились
 else
     echo "ERROR: Could not determine database connection details!"
-    echo "Please ensure your MySQL service is linked to this application."
-    echo "Alternatively, set DB_HOST, DB_USERNAME, DB_PASSWORD environment variables."
+    echo "Please ensure:"
+    echo "1. MySQL service is linked to this application"
+    echo "2. DATABASE_URL variable is set to: \${{ MySQL-usZd.MYSQL_URL }}"
+    echo "3. Or set DB_HOST, DB_USERNAME, DB_PASSWORD manually"
     
-    # Диагностика
-    echo "=== ENVIRONMENT DIAGNOSTICS ==="
-    echo "MYSQL* variables:"
-    printenv | grep MYSQL || echo "None"
-    echo "DB_* variables:"
-    printenv | grep '^DB_' || echo "None"
-    echo "DATABASE_URL: $DATABASE_URL"
-    echo "Railway Secrets:"
+    # Расширенная диагностика
+    echo "===== FULL ENVIRONMENT DUMP ====="
+    printenv | sort
+    echo "===== RAILWAY SECRETS ====="
     ls -la /etc/railway/secrets || echo "No secrets directory"
     
     exit 1
@@ -96,7 +89,7 @@ fi
 export DB_PORT=${DB_PORT:-3306}
 export DB_DATABASE=${DB_DATABASE:-railway}
 
-# Отладочный вывод
+# Отладочный вывод (без пароля)
 echo "=== DB CONNECTION DETAILS ==="
 echo "Host: $DB_HOST:$DB_PORT"
 echo "Database: $DB_DATABASE"
@@ -108,7 +101,8 @@ echo "=== NETWORK DIAGNOSTICS ==="
 echo "Resolving DB host:"
 nslookup $DB_HOST || echo "DNS lookup failed"
 echo "Testing DB port:"
-nc -zv -w 5 $DB_HOST $DB_PORT || echo "Port test failed"
+timeout 5 bash -c "cat < /dev/null > /dev/tcp/$DB_HOST/$DB_PORT" && \
+    echo "Port test successful" || echo "Port test failed"
 
 # Настройка Laravel
 mkdir -p storage/framework/{sessions,views,cache}
