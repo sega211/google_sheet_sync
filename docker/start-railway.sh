@@ -1,12 +1,31 @@
 #!/bin/bash
 set -e
 
-# Используем стандартные переменные Railway для MySQL
-export DB_HOST=${MYSQLHOST:-localhost}
-export DB_PORT=${MYSQLPORT:-3306}
-export DB_DATABASE=${MYSQLDATABASE:-railway}
-export DB_USERNAME=${MYSQLUSER:-root}
-export DB_PASSWORD=${MYSQLPASSWORD:-}
+
+# Парсинг DATABASE_URL
+if [ -n "$DATABASE_URL" ]; then
+  echo "Parsing DATABASE_URL..."
+  DB_INFO=$(echo "$DATABASE_URL" | awk -F[:/@] '{print $4,$5,$7,$8,$9}')
+  DB_USER=$(echo $DB_INFO | cut -d' ' -f1)
+  DB_PASS=$(echo $DB_INFO | cut -d' ' -f2)
+  DB_HOST=$(echo $DB_INFO | cut -d' ' -f3)
+  DB_PORT=$(echo $DB_INFO | cut -d' ' -f4)
+  DB_NAME=$(echo $DB_INFO | cut -d' ' -f5)
+
+  export DB_HOST=$DB_HOST
+  export DB_PORT=$DB_PORT
+  export DB_DATABASE=$DB_NAME
+  export DB_USERNAME=$DB_USER
+  export DB_PASSWORD=$DB_PASS
+fi
+
+# Отладочный вывод
+echo "=== Parsed from DATABASE_URL ==="
+echo "DB_HOST: $DB_HOST"
+echo "DB_PORT: $DB_PORT"
+echo "DB_DATABASE: $DB_DATABASE"
+echo "DB_USERNAME: $DB_USERNAME"
+echo "DB_PASSWORD: ${DB_PASSWORD:0:2}******"
 
 # Отладочный вывод
 echo "=== Railway DB Variables ==="
