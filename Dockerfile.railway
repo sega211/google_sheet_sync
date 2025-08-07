@@ -30,7 +30,7 @@ RUN composer install --optimize-autoloader --no-dev --no-scripts
 COPY . .
 
 # Установка Node.js зависимостей и сборка
-RUN npm install && npm run build
+RUN npm install && npm run production
 
 # Настройка прав
 RUN chown -R www-data:www-data storage bootstrap/cache \
