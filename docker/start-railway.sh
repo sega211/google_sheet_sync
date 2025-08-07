@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+# Добавляем утилиты для диагностики сети
+apt-get update && apt-get install -y dnsutils netcat
+
 # Установка порта
 export PORT=${PORT:-80}
 echo "Using port: $PORT"
@@ -11,12 +14,11 @@ else
 fi
 
 # Используем СТАНДАРТНЫЕ переменные Railway для MySQL
-# Railway автоматически создает эти переменные при связывании сервисов
-export DB_HOST=$MYSQLHOST
-export DB_PORT=$MYSQLPORT
-export DB_DATABASE=$MYSQLDATABASE
-export DB_USERNAME=$MYSQLUSER
-export DB_PASSWORD=$MYSQLPASSWORD
+export DB_HOST=${MYSQLHOST:?err} # Падаем если не установлено
+export DB_PORT=${MYSQLPORT:?err}
+export DB_DATABASE=${MYSQLDATABASE:?err}
+export DB_USERNAME=${MYSQLUSER:?err}
+export DB_PASSWORD=${MYSQLPASSWORD:?err}
 
 # Отладочный вывод переменных
 echo "=== RAILWAY DB VARIABLES ==="
@@ -26,12 +28,11 @@ echo "MYSQLDATABASE: $MYSQLDATABASE"
 echo "MYSQLUSER: $MYSQLUSER"
 echo "MYSQLPASSWORD: ${MYSQLPASSWORD:0:2}******"
 
-echo "=== LARAVEL DB VARIABLES ==="
-echo "DB_HOST: $DB_HOST"
-echo "DB_PORT: $DB_PORT"
-echo "DB_DATABASE: $DB_DATABASE"
-echo "DB_USERNAME: $DB_USERNAME"
-echo "DB_PASSWORD: ${DB_PASSWORD:0:2}******"
+echo "=== NETWORK DIAGNOSTICS ==="
+echo "Resolving host:"
+nslookup $MYSQLHOST
+echo "Testing port:"
+nc -zv $MYSQLHOST $MYSQLPORT
 
 # Настройка Laravel
 mkdir -p storage/framework/{sessions,views,cache}
@@ -39,28 +40,20 @@ chown -R www-data:www-data storage bootstrap/cache public
 chmod -R 775 storage
 
 # Проверка подключения и миграции
-if [ -n "$MYSQLHOST" ] && [ -n "$MYSQLPORT" ] && [ -n "$MYSQLUSER" ] && [ -n "$MYSQLPASSWORD" ]; then
-  echo "Waiting for MySQL..."
-  for i in {1..30}; do
-    if mysqladmin ping -h"$MYSQLHOST" -P"$MYSQLPORT" -u"$MYSQLUSER" -p"$MYSQLPASSWORD" --silent; then
-      echo "MySQL ready!"
-      
-      echo "Running migrations..."
-      php artisan migrate --force
-      
-      # Если нужны начальные данные
-      # echo "Seeding database..."
-      # php artisan db:seed --force
-      
-      break
-    else
-      echo "Attempt $i/30 - waiting 2s..."
-      sleep 2
-    fi
-  done
-else
-  echo "Skipping DB operations: MySQL variables not set"
-fi
+echo "Waiting for MySQL..."
+for i in {1..30}; do
+  if mysqladmin ping -h"$MYSQLHOST" -P"$MYSQLPORT" -u"$MYSQLUSER" -p"$MYSQLPASSWORD" --silent; then
+    echo "MySQL ready!"
+    
+    echo "Running migrations..."
+    php artisan migrate --force
+    
+    break
+  else
+    echo "Attempt $i/30 - waiting 2s..."
+    sleep 2
+  fi
+done
 
 # Кеширование
 echo "Caching configuration..."
