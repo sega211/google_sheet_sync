@@ -1,0 +1,47 @@
+FROM php:8.3-fpm
+
+# Установка зависимостей
+RUN apt-get update && apt-get install -y \
+    git curl libpng-dev libonig-dev libxml2-dev libzip-dev \
+    zip unzip cron default-mysql-client libmagickwand-dev supervisor
+
+# PHP расширения
+RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip
+RUN pecl install imagick && docker-php-ext-enable imagick
+
+# Node.js
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs
+
+# Composer
+RUN curl -sS https://getcomposer.org/installer | php -- \
+    --install-dir=/usr/local/bin --filename=composer
+
+# Рабочая директория
+WORKDIR /var/www
+
+# Копируем только файлы зависимостей
+COPY composer.* package*.json ./
+
+# Установка зависимостей
+RUN composer install --optimize-autoloader --no-dev \
+    && npm install && npm run build
+
+# Копируем остальные файлы
+COPY . .
+
+# Настройка прав
+RUN chown -R www-data:www-data storage bootstrap/cache \
+    && chmod -R 775 storage
+
+# Конфигурация супервизора
+COPY docker/supervisor.railway.conf /etc/supervisor/conf.d/supervisord.conf
+
+# Стартовый скрипт
+COPY docker/start-railway.sh /start.sh
+RUN chmod +x /start.sh
+
+# Очистка
+RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+CMD ["/start.sh"]
