@@ -1,12 +1,20 @@
 #!/bin/bash
 set -e
 
-# Установка порта по умолчанию
-export PORT=${PORT:-80}
+# Установка порта
+export PORT=${PORT:-$RAILWAY_STATIC_PORT}
+if [ -z "$PORT" ]; then
+  export PORT=80
+fi
 
 # Настройка Nginx порта
 echo "Setting Nginx port to $PORT"
-sed -i "s/listen .*/listen $PORT;/" /etc/nginx/sites-available/default
+sed -i "s/listen .*/listen $PORT default_server reuseport;/" /etc/nginx/sites-available/default
+
+# Проверка всех переменных окружения
+echo "=== Все переменные окружения ==="
+printenv | grep -v -E 'PASSWORD|TOKEN|KEY|SECRET' # Не выводим секреты
+
 # Парсинг DATABASE_URL
 if [ -n "$DATABASE_URL" ]; then
   echo "Parsing DATABASE_URL..."
@@ -24,58 +32,35 @@ if [ -n "$DATABASE_URL" ]; then
   export DB_PASSWORD=$DB_PASS
 fi
 
-# Отладочный вывод
-echo "=== Parsed from DATABASE_URL ==="
+# Отладочный вывод переменных БД
+echo "=== Переменные БД ==="
 echo "DB_HOST: $DB_HOST"
 echo "DB_PORT: $DB_PORT"
 echo "DB_DATABASE: $DB_DATABASE"
 echo "DB_USERNAME: $DB_USERNAME"
 echo "DB_PASSWORD: ${DB_PASSWORD:0:2}******"
-
-# Отладочный вывод
-echo "=== Railway DB Variables ==="
-echo "MYSQLHOST: $MYSQLHOST"
-echo "MYSQLPORT: $MYSQLPORT"
-echo "MYSQLDATABASE: $MYSQLDATABASE"
-echo "MYSQLUSER: $MYSQLUSER"
-echo "MYSQLPASSWORD: ${MYSQLPASSWORD:0:2}******"
-
-echo "=== Laravel DB Variables ==="
-echo "DB_HOST: $DB_HOST"
-echo "DB_PORT: $DB_PORT"
-echo "DB_DATABASE: $DB_DATABASE"
-echo "DB_USERNAME: $DB_USERNAME"
-echo "DB_PASSWORD: ${DB_PASSWORD:0:2}******"
-
-# Функция проверки MySQL
-wait_for_db() {
-    echo "Waiting for MySQL at $DB_HOST:$DB_PORT..."
-    for i in {1..30}; do
-        if mysqladmin ping -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USERNAME" -p"$DB_PASSWORD" --silent; then
-            echo "MySQL is ready!"
-            return 0
-        fi
-        echo "Attempt $i/30 - waiting 2s..."
-        sleep 2
-    done
-    echo "MySQL connection failed after 30 attempts"
-    return 1
-}
-
-# Проверка подключения
-if [ -n "$MYSQLHOST" ]; then
-    wait_for_db
-fi
 
 # Настройка Laravel
 mkdir -p storage/framework/{sessions,views,cache}
-chown -R www-data:www-data storage bootstrap/cache
+chown -R www-data:www-data storage bootstrap/cache public
 chmod -R 775 storage
 
-# Миграции
-if [ -n "$DB_DATABASE" ]; then
-    echo "Running migrations..."
-    php artisan migrate --force
+# Проверка подключения к БД
+if [ -n "$DB_HOST" ] && [ -n "$DB_PORT" ]; then
+  echo "Ожидание готовности MySQL..."
+  for i in {1..30}; do
+    if mysqladmin ping -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USERNAME" -p"$DB_PASSWORD" --silent; then
+      echo "MySQL готов!"
+      echo "Выполнение миграций..."
+      php artisan migrate --force
+      break
+    else
+      echo "Попытка $i/30 - MySQL не готов, ожидание..."
+      sleep 2
+    fi
+  done
+else
+  echo "Пропуск проверки MySQL: не указаны хост или порт"
 fi
 
 # Кеширование
@@ -83,16 +68,19 @@ php artisan config:cache
 php artisan route:cache
 php artisan view:cache
 
-# Запуск сервисов
-echo "Starting services..."
-
-# Перед запуском supervisord
-echo "Testing PHP-FPM configuration..."
+# Проверка конфигураций
+echo "Тестирование конфигурации PHP-FPM..."
 php-fpm -t
-
-echo "Testing Nginx configuration..."
+echo "Тестирование конфигурации Nginx..."
 nginx -t
 
-echo "Current network connections:"
-netstat -tuln
+# Проверка работы служб
+echo "Проверка работы PHP-FPM..."
+SCRIPT_NAME=/ping SCRIPT_FILENAME=/ping REQUEST_METHOD=GET cgi-fcgi -bind -connect 127.0.0.1:9000 || echo "PHP-FPM не отвечает"
+
+echo "Проверка работы Nginx..."
+timeout 5 bash -c 'until curl -sI http://localhost:$PORT; do sleep 1; done' || echo "Nginx не отвечает"
+
+# Запуск сервисов
+echo "Запуск супервизора..."
 exec /usr/bin/supervisord -n -c /etc/supervisor/conf.d/supervisord.conf
