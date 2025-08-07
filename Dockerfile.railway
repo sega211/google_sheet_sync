@@ -2,11 +2,10 @@ FROM php:8.3-fpm
 
 # Установка зависимостей
 RUN apt-get update && apt-get install -y \
-    git curl libpng-dev libonig-dev libxml2-dev libzip-dev nginx net-tools iproute2 dnsutils\
-    zip unzip cron default-mysql-client libmagickwand-dev supervisor
-# Копируем конфиг Nginx
-COPY docker/nginx/railway.conf /etc/nginx/sites-available/default
-COPY docker/php-fpm.conf /usr/local/etc/php-fpm.d/zz-railway.conf
+    git curl libpng-dev libonig-dev libxml2-dev libzip-dev nginx \
+    zip unzip cron default-mysql-client libmagickwand-dev supervisor \
+    net-tools iproute2 dnsutils
+
 # PHP расширения
 RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip
 RUN pecl install imagick && docker-php-ext-enable imagick
@@ -23,28 +22,27 @@ RUN curl -sS https://getcomposer.org/installer | php -- \
 WORKDIR /var/www
 
 # Копируем только файлы необходимые для установки зависимостей
-COPY composer.* package*.json ./
+COPY composer.* ./
 
-# Установка PHP зависимостей (без скриптов)
+# Установка PHP зависимостей
 RUN composer install --optimize-autoloader --no-dev --no-scripts
 
-# Копируем остальные файлы (включая artisan)
+# Копируем остальные файлы
 COPY . .
 
-# Установка Node.js зависимостей и сборка
+# Установка Node.js зависимостей
 RUN npm install && npm run production
 
 # Настройка прав
-RUN chown -R www-data:www-data storage public bootstrap/cache \
+RUN chown -R www-data:www-data storage bootstrap/cache public \
     && chmod -R 775 storage
 
-# Запуск Laravel скриптов после копирования всех файлов
+# Запуск Laravel скриптов
 RUN composer run-script post-autoload-dump --ansi
 
-# Конфигурация супервизора
+# Конфигурация
+COPY docker/nginx/railway.conf /etc/nginx/sites-available/default
 COPY docker/supervisor.railway.conf /etc/supervisor/conf.d/supervisord.conf
-
-# Стартовый скрипт
 COPY docker/start-railway.sh /start.sh
 RUN chmod +x /start.sh
 

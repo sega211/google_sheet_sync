@@ -3,7 +3,16 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\FetchCommentsController;
-
+Route::get('/health', function() {
+    return response()->json([
+        'status' => 'ok',
+        'services' => [
+            'nginx' => true,
+            'php' => true,
+            'db' => DB::connection()->getPdo() ? true : false
+        ]
+    ]);
+});
 Route::resource('products', ProductController::class);
 
 Route::prefix('products')->group(function () {
