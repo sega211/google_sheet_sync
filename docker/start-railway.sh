@@ -1,9 +1,6 @@
 #!/bin/bash
 set -e
 
-# Добавляем утилиты для диагностики сети
-apt-get update && apt-get install -y dnsutils netcat
-
 # Установка порта
 export PORT=${PORT:-80}
 echo "Using port: $PORT"
@@ -13,14 +10,23 @@ else
     echo "Nginx default conf not found at /etc/nginx/sites-available/default"
 fi
 
-# Используем СТАНДАРТНЫЕ переменные Railway для MySQL
-export DB_HOST=${MYSQLHOST:?err} # Падаем если не установлено
-export DB_PORT=${MYSQLPORT:?err}
-export DB_DATABASE=${MYSQLDATABASE:?err}
-export DB_USERNAME=${MYSQLUSER:?err}
-export DB_PASSWORD=${MYSQLPASSWORD:?err}
+# Проверка наличия переменных
+if [ -z "$MYSQLHOST" ] || [ -z "$MYSQLPORT" ] || [ -z "$MYSQLUSER" ] || [ -z "$MYSQLPASSWORD" ]; then
+  echo "ERROR: MySQL variables not set!"
+  echo "MYSQLHOST: $MYSQLHOST"
+  echo "MYSQLPORT: $MYSQLPORT"
+  echo "MYSQLUSER: $MYSQLUSER"
+  echo "MYSQLPASSWORD: ${MYSQLPASSWORD:0:2}******"
+  exit 1
+fi
 
-# Отладочный вывод переменных
+export DB_HOST=$MYSQLHOST
+export DB_PORT=$MYSQLPORT
+export DB_DATABASE=$MYSQLDATABASE
+export DB_USERNAME=$MYSQLUSER
+export DB_PASSWORD=$MYSQLPASSWORD
+
+# Отладочный вывод
 echo "=== RAILWAY DB VARIABLES ==="
 echo "MYSQLHOST: $MYSQLHOST"
 echo "MYSQLPORT: $MYSQLPORT"
@@ -29,10 +35,10 @@ echo "MYSQLUSER: $MYSQLUSER"
 echo "MYSQLPASSWORD: ${MYSQLPASSWORD:0:2}******"
 
 echo "=== NETWORK DIAGNOSTICS ==="
-echo "Resolving host:"
-nslookup $MYSQLHOST
-echo "Testing port:"
-nc -zv $MYSQLHOST $MYSQLPORT
+echo "Pinging host:"
+ping -c 4 $MYSQLHOST
+echo "Testing port with telnet:"
+timeout 5 telnet $MYSQLHOST $MYSQLPORT || echo "Telnet failed"
 
 # Настройка Laravel
 mkdir -p storage/framework/{sessions,views,cache}
