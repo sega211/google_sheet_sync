@@ -2,6 +2,12 @@
 set -e
 
 # Функция ожидания готовности MySQL
+echo "=== Переменные окружения ==="
+echo "DB_HOST: $DB_HOST"
+echo "DB_PORT: $DB_PORT"
+echo "DB_USERNAME: $DB_USERNAME"
+echo "DB_DATABASE: $DB_DATABASE"
+echo "DB_PASSWORD: ${DB_PASSWORD:0:2}******"
 wait_for_db() {
     local host="$1"
     local port="$2"
