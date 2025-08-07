@@ -6,6 +6,7 @@ RUN apt-get update && apt-get install -y \
     zip unzip cron default-mysql-client libmagickwand-dev supervisor
 # Копируем конфиг Nginx
 COPY docker/nginx/railway.conf /etc/nginx/sites-available/default
+COPY docker/php-fpm.conf /usr/local/etc/php-fpm.d/zz-railway.conf
 # PHP расширения
 RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip
 RUN pecl install imagick && docker-php-ext-enable imagick
@@ -34,7 +35,7 @@ COPY . .
 RUN npm install && npm run production
 
 # Настройка прав
-RUN chown -R www-data:www-data storage bootstrap/cache \
+RUN chown -R www-data:www-data storage public bootstrap/cache \
     && chmod -R 775 storage
 
 # Запуск Laravel скриптов после копирования всех файлов

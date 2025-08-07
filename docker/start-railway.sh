@@ -85,4 +85,14 @@ php artisan view:cache
 
 # Запуск сервисов
 echo "Starting services..."
+
+# Перед запуском supervisord
+echo "Testing PHP-FPM configuration..."
+php-fpm -t
+
+echo "Testing Nginx configuration..."
+nginx -t
+
+echo "Current network connections:"
+netstat -tuln
 exec /usr/bin/supervisord -n -c /etc/supervisor/conf.d/supervisord.conf
