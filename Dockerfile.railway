@@ -21,7 +21,7 @@ RUN curl -sS https://getcomposer.org/installer | php -- \
 WORKDIR /var/www
 
 # Копируем только файлы необходимые для установки зависимостей
-COPY composer.json composer.lock package.json package-lock.json ./
+COPY composer.* package*.json ./
 
 # Установка PHP зависимостей (без скриптов)
 RUN composer install --optimize-autoloader --no-dev --no-scripts
