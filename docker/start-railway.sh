@@ -13,52 +13,29 @@ else
     echo "Nginx default conf not found at /etc/nginx/sites-available/default"
 fi
 
-# =================================================================
-# НАЧАЛО КРИТИЧЕСКОЙ СЕКЦИИ - РУЧНЫЕ ПЕРЕМЕННЫЕ ДЛЯ ПОДКЛЮЧЕНИЯ К БД
-# =================================================================
+# =====================================================
+# НАЧАЛО ХАРДКОДА ПАРАМЕТРОВ ПОДКЛЮЧЕНИЯ К БД
+# =====================================================
 
-echo "===== RAILWAY SERVICE STATUS ====="
-echo "Service ID: $RAILWAY_SERVICE_ID"
-echo "Environment: $RAILWAY_ENVIRONMENT_NAME"
-echo "Project: $RAILWAY_PROJECT_NAME"
+echo "!!! WARNING: USING HARDCODED DATABASE VALUES !!!"
 
-echo "===== ENVIRONMENT DIAGNOSTICS ====="
-env | grep -E 'DB_|MYSQL' || echo "No DB/MYSQL variables found"
-
-# Проверяем наличие критических переменных
-if [[ -z "$DB_HOST" || -z "$DB_USERNAME" || -z "$DB_PASSWORD" ]]; then
-    echo ""
-    echo "ERROR: Database connection variables are missing!"
-    echo "Please set in Railway dashboard:"
-    echo "DB_HOST, DB_USERNAME, DB_PASSWORD"
-    echo ""
-    echo "Current values:"
-    echo "DB_HOST: '$DB_HOST'"
-    echo "DB_USERNAME: '$DB_USERNAME'"
-    echo "DB_PASSWORD: ${DB_PASSWORD:+[present]}"
-    echo ""
-    echo "===== FULL ENVIRONMENT DUMP ====="
-    printenv | sort
-    echo "===== RAILWAY SECRETS FILES ====="
-    ls -la /etc/railway/secrets
-    [ -f "/etc/railway/secrets/mysql.json" ] && cat /etc/railway/secrets/mysql.json
-    exit 1
-fi
-
-# Установка значений по умолчанию для опциональных переменных
-export DB_PORT=${DB_PORT:-3306}
-export DB_DATABASE=${DB_DATABASE:-railway}
+# Параметры подключения к БД
+export DB_HOST="mysql-uszd.railway.internal"
+export DB_PORT="3306"
+export DB_DATABASE="railway"
+export DB_USERNAME="root"
+export DB_PASSWORD="nAtXjZcBdFfIgRMaVbnxjukVujUJckjQ"
 
 # Отладочный вывод
-echo "=== USING MANUAL DB CONNECTION ==="
+echo "=== HARDCODED DB CONNECTION ==="
 echo "Host: $DB_HOST:$DB_PORT"
 echo "Database: $DB_DATABASE"
 echo "Username: $DB_USERNAME"
 echo "Password: ${DB_PASSWORD:0:2}******"
 
-# =================================================================
-# КОНЕЦ КРИТИЧЕСКОЙ СЕКЦИИ
-# =================================================================
+# =====================================================
+# КОНЕЦ ХАРДКОДА
+# =====================================================
 
 # Диагностика сети
 echo "=== NETWORK DIAGNOSTICS ==="
