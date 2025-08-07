@@ -20,19 +20,24 @@ RUN curl -sS https://getcomposer.org/installer | php -- \
 # Рабочая директория
 WORKDIR /var/www
 
-# Копируем только файлы зависимостей
-COPY composer.* package*.json ./
+# Копируем только файлы необходимые для установки зависимостей
+COPY composer.json composer.lock package.json package-lock.json ./
 
-# Установка зависимостей
-RUN composer install --optimize-autoloader --no-dev \
-    && npm install && npm run build
+# Установка PHP зависимостей (без скриптов)
+RUN composer install --optimize-autoloader --no-dev --no-scripts
 
-# Копируем остальные файлы
+# Копируем остальные файлы (включая artisan)
 COPY . .
+
+# Установка Node.js зависимостей и сборка
+RUN npm install && npm run build
 
 # Настройка прав
 RUN chown -R www-data:www-data storage bootstrap/cache \
     && chmod -R 775 storage
+
+# Запуск Laravel скриптов после копирования всех файлов
+RUN composer run-script post-autoload-dump --ansi
 
 # Конфигурация супервизора
 COPY docker/supervisor.railway.conf /etc/supervisor/conf.d/supervisord.conf
