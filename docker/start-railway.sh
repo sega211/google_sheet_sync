@@ -10,35 +10,29 @@ else
     echo "Nginx default conf not found at /etc/nginx/sites-available/default"
 fi
 
-# Проверка наличия переменных
-if [ -z "$MYSQLHOST" ] || [ -z "$MYSQLPORT" ] || [ -z "$MYSQLUSER" ] || [ -z "$MYSQLPASSWORD" ]; then
-  echo "ERROR: MySQL variables not set!"
-  echo "MYSQLHOST: $MYSQLHOST"
-  echo "MYSQLPORT: $MYSQLPORT"
-  echo "MYSQLUSER: $MYSQLUSER"
-  echo "MYSQLPASSWORD: ${MYSQLPASSWORD:0:2}******"
-  exit 1
-fi
-
-export DB_HOST=$MYSQLHOST
-export DB_PORT=$MYSQLPORT
-export DB_DATABASE=$MYSQLDATABASE
-export DB_USERNAME=$MYSQLUSER
-export DB_PASSWORD=$MYSQLPASSWORD
+# Используем переменные для Laravel
+export DB_HOST=${DB_HOST:-}
+export DB_PORT=${DB_PORT:-3306}
+export DB_DATABASE=${DB_DATABASE:-}
+export DB_USERNAME=${DB_USERNAME:-}
+export DB_PASSWORD=${DB_PASSWORD:-}
 
 # Отладочный вывод
-echo "=== RAILWAY DB VARIABLES ==="
-echo "MYSQLHOST: $MYSQLHOST"
-echo "MYSQLPORT: $MYSQLPORT"
-echo "MYSQLDATABASE: $MYSQLDATABASE"
-echo "MYSQLUSER: $MYSQLUSER"
-echo "MYSQLPASSWORD: ${MYSQLPASSWORD:0:2}******"
+echo "=== LARAVEL DB VARIABLES ==="
+echo "DB_HOST: $DB_HOST"
+echo "DB_PORT: $DB_PORT"
+echo "DB_DATABASE: $DB_DATABASE"
+echo "DB_USERNAME: $DB_USERNAME"
+echo "DB_PASSWORD: ${DB_PASSWORD:0:2}******"
 
-echo "=== NETWORK DIAGNOSTICS ==="
-echo "Pinging host:"
-ping -c 4 $MYSQLHOST
-echo "Testing port with telnet:"
-timeout 5 telnet $MYSQLHOST $MYSQLPORT || echo "Telnet failed"
+# Проверка наличия переменных
+if [ -z "$DB_HOST" ] || [ -z "$DB_USERNAME" ] || [ -z "$DB_PASSWORD" ]; then
+  echo "ERROR: Database variables not set! Please check Railway service connections."
+  echo "Make sure you have:"
+  echo "- Linked MySQL service to your application"
+  echo "- Set variables with correct syntax: \${{ MySQL-usZd.MYSQLHOST }} etc."
+  exit 1
+fi
 
 # Настройка Laravel
 mkdir -p storage/framework/{sessions,views,cache}
@@ -46,9 +40,9 @@ chown -R www-data:www-data storage bootstrap/cache public
 chmod -R 775 storage
 
 # Проверка подключения и миграции
-echo "Waiting for MySQL..."
+echo "Waiting for MySQL connection at $DB_HOST:$DB_PORT..."
 for i in {1..30}; do
-  if mysqladmin ping -h"$MYSQLHOST" -P"$MYSQLPORT" -u"$MYSQLUSER" -p"$MYSQLPASSWORD" --silent; then
+  if mysqladmin ping -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USERNAME" -p"$DB_PASSWORD" --silent; then
     echo "MySQL ready!"
     
     echo "Running migrations..."
